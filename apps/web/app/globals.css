@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens: dark is the default. Accent is user-customisable at runtime. */
+:root {
+  --bg: #0b0f17; --surface: #121826; --raised: #1a2235; --border: #26304a;
+  --text: #e8edf6; --muted: #9aa7bd; --accent: #5b8cff; --on-accent: #ffffff;
+  --ok: #3ddc97; --warn: #ffc24b; --crit: #ff6b6b;
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  --bg: #f4f6fa; --surface: #ffffff; --raised: #eef1f6; --border: #d6dce6;
+  --text: #14181f; --muted: #4d5868; --accent: #2f6bff;
+  --ok: #0a7d4a; --warn: #9a6200; --crit: #c42b2b;
+  color-scheme: light;
+}
+body { background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.pulse-crit { animation: pulse-crit 1.6s infinite; }
+@keyframes pulse-crit { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--crit) 25%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .pulse-crit { animation: none; } }
