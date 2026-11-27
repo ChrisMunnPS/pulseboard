@@ -6,6 +6,13 @@ maintained by release-please from [Conventional Commit](https://www.conventional
 
 Versions 0.1.0 to 0.5.0 were development builds handed over as archives, so they have no release dates.
 
+## [0.7.0](https://github.com/ChrisMunnPS/pulseboard/compare/pulseboard-v0.6.0...pulseboard-v0.7.0) (2026-11-27)
+
+
+### Features
+
+* add SSH monitoring and fleet insights ([ab456a4](https://github.com/ChrisMunnPS/pulseboard/commit/ab456a4b18c43764700906b6be5787ff4417a712))
+
 ## [0.6.0]
 
 ### Added
