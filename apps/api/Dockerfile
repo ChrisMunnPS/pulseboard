@@ -1,5 +1,5 @@
 # ---- build: compile the API into one JavaScript file ----
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
@@ -11,7 +11,7 @@ COPY apps/api apps/api
 RUN npm run bundle --workspace apps/api
 
 # ---- run: nothing but Node, the bundle and the SQL migrations ----
-FROM node:22-alpine
+FROM node:26-alpine
 # Pick up OS security fixes, and remove npm and yarn: the app does not need them at runtime,
 # and their bundled packages are a common source of scanner findings.
 RUN apk upgrade --no-cache \
