@@ -1,12 +1,15 @@
 import { pool } from './db';
 import { collect, friendlySnmpError, type Counters, type SnmpCfg } from './snmp';
 import { getLive } from './live';
+import { collectSsh } from './ssh-collect';
 import { runPing, tcpCheck } from './ping';
 import type { DeviceRow } from './types';
 import { vault } from './vault-instance';
 import { config } from './config';
 
 const counters: Counters = new Map();
+// Container and virtual-switch ports are left out of throughput totals
+export const VIRTUAL_IF = /^(docker|veth|br-|virbr|sit\d|ovs-system|tun\d*|tap\d*|dummy|ifb|lo\d*$)/i;
 
 /** Combines the stored (non-secret) settings with the decrypted secret. Only ever used in memory. */
 export function snmpConfigOf(row: Pick<DeviceRow, 'monitor_config' | 'monitor_secret_enc'>): SnmpCfg {
@@ -15,7 +18,7 @@ export function snmpConfigOf(row: Pick<DeviceRow, 'monitor_config' | 'monitor_se
   return { version: c.version ?? 'v2c', port: Number(c.port ?? 161), username: c.username, securityLevel: c.securityLevel, authProtocol: c.authProtocol, privProtocol: c.privProtocol, community: secret.community, authKey: secret.authKey, privKey: secret.privKey };
 }
 
-export async function poll(row: DeviceRow): Promise<void> {
+export async function poll(row: DeviceRow, force = false): Promise<void> {
   const l = getLive(row.id);
   l.polled = true;
   try {
@@ -27,15 +30,22 @@ export async function poll(row: DeviceRow): Promise<void> {
     } else if (row.monitor === 'tcp') {
       const ms = await tcpCheck(row.address, Number((row.monitor_config as { port?: number }).port ?? 443));
       l.network = { ...l.network, latencyMs: ms, lossPct: 0, jitterMs: null };
+    } else if (row.monitor === 'ssh') {
+      if (!(await collectSsh(row, l, force))) return;
+      l.network = { ...l.network, latencyMs: null, lossPct: 0, jitterMs: null };
     } else if (row.monitor === 'snmp') {
       const wantInventory = !l.inventory || Date.now() - l.inventoryAt > 3_600_000;
       const r = await collect(row.id, row.address, snmpConfigOf(row), counters, wantInventory).catch((e) => { throw new Error(friendlySnmpError(e)); });
-      Object.assign(l, { sysDescr: r.sysDescr, uptimeS: r.uptimeS, cpu: r.cpu, memory: r.memory, disk: r.disk, cores: r.cores, volumes: r.volumes, interfaces: r.interfaces, processes: r.processes });
+      Object.assign(l, { temperatureC: r.temperatureC, drives: r.drives, sysDescr: r.sysDescr, uptimeS: r.uptimeS, cpu: r.cpu, memory: r.memory, disk: r.disk, cores: r.cores, volumes: r.volumes, interfaces: r.interfaces, processes: r.processes });
       if (r.inventory) { l.inventory = r.inventory; l.inventoryAt = Date.now(); }
       l.network = { downMbps: null, upMbps: null, latencyMs: r.rttMs, lossPct: 0, jitterMs: null };
     }
     l.misses = 0; l.lastSeen = Date.now(); l.error = null;
-    metrics.push(['cpu', l.cpu], ['memory', l.memory], ['disk', l.disk], ['latency_ms', l.network.latencyMs], ['loss_pct', l.network.lossPct]);
+    const real = l.interfaces.filter((i) => i.up && !VIRTUAL_IF.test(i.name) && i.inBps !== null);
+    const sum = (f: (i: (typeof real)[number]) => number | null) => (real.length ? real.reduce((a, i) => a + (f(i) ?? 0), 0) : null);
+    const driveTemps = l.drives.map((d) => d.tempC).filter((t): t is number => t !== null);
+    metrics.push(['cpu', l.cpu], ['memory', l.memory], ['disk', l.disk], ['latency_ms', l.network.latencyMs], ['loss_pct', l.network.lossPct],
+      ['temp_c', l.temperatureC], ['disk_temp_c', driveTemps.length ? Math.max(...driveTemps) : null], ['net_in_bps', sum((i) => i.inBps)], ['net_out_bps', sum((i) => i.outBps)]);
     const kept = metrics.filter((m): m is [string, number] => m[1] !== null);
     if (kept.length) await pool.query('insert into metrics (time, device_id, metric, value) select now(), $1, unnest($2::text[]), unnest($3::float8[])', [row.id, kept.map((m) => m[0]), kept.map((m) => m[1])]);
     await pool.query('update devices set last_seen = now() where id = $1', [row.id]);
@@ -52,7 +62,7 @@ export function startPoller(getFleet: () => DeviceRow[], log: (m: string) => voi
     if (running) return;
     running = true;
     try {
-      const targets = getFleet().filter((d) => d.monitor !== 'simulated');
+      const targets = getFleet().filter((d) => d.monitor !== 'simulated' && !d.monitor_paused);
       for (let i = 0; i < targets.length; i += 8) await Promise.all(targets.slice(i, i + 8).map((d) => poll(d).catch((e: Error) => log(`Poll of ${d.name} failed: ${e.message}`))));
     } finally { running = false; }
   };

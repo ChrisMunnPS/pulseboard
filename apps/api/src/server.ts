@@ -9,12 +9,15 @@ import { audit, guard } from './auth';
 import { config } from './config';
 import { migrate, pool, waitForDb } from './db';
 import { registerDeviceRoutes } from './devices';
+import { forgetStatus, purge, trackStatus } from './history';
+import { registerInsightRoutes } from './insights';
 import { evaluate, startEngine } from './engine';
 import { getFleet, loadFleet } from './fleet';
 import { step } from './mock';
 import { startPoller } from './poller';
 import { lockedFor, recordFail, recordOk } from './ratelimit';
 import { issueTicket, redeemTicket } from './tickets';
+import { VERSION } from './version';
 import { deviceView } from './views';
 
 // Request logs never include the query string, so tokens or tickets cannot leak into them.
@@ -77,7 +80,7 @@ const tick = (): FleetTick => ({
 // ---------- routes ----------
 app.get('/health', async () => {
   await pool.query('select 1');
-  return { status: 'ok', version: process.env.APP_VERSION ?? 'dev' };
+  return { status: 'ok', version: VERSION };
 });
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 12); // compared when the user is unknown, so timing does not reveal valid emails
@@ -125,6 +128,7 @@ app.post('/api/v1/ws-ticket', { preHandler: guard('devices:read') }, async (req)
 
 await registerAdminRoutes(app);
 await registerDeviceRoutes(app);
+await registerInsightRoutes(app);
 
 app.get('/ws/fleet', { websocket: true }, (socket, req) => {
   if (!redeemTicket((req.query as { ticket?: string }).ticket ?? '')) {
@@ -136,9 +140,16 @@ app.get('/ws/fleet', { websocket: true }, (socket, req) => {
 
 setInterval(() => {
   step();
+  trackStatus(getFleet().map(deviceView)).catch((e: Error) => app.log.error(`Status log failed: ${e.message}`));
   evaluate(getFleet()).catch((e: Error) => app.log.error(`Rule check failed: ${e.message}`));
   const msg = JSON.stringify(tick());
   for (const client of app.websocketServer.clients) if (client.readyState === 1) client.send(msg);
 }, 5000);
 
+// Old readings are deleted once a day (RETENTION_DAYS)
+const runPurge = () => purge(config.RETENTION_DAYS).catch((e: Error) => app.log.error(`Purge failed: ${e.message}`));
+void runPurge();
+setInterval(runPurge, 24 * 3_600_000);
+
+app.log.info(`Pulseboard ${VERSION}`);
 await app.listen({ port: config.PORT, host: '0.0.0.0' });

@@ -1,4 +1,4 @@
-import type { IfaceInfo, Inventory, ProcessInfo, SnmpInput, Volume } from '@pulse/shared';
+import type { DriveHealth, IfaceInfo, Inventory, ProcessInfo, SnmpInput, Volume } from '@pulse/shared';
 import snmp from 'net-snmp';
 import { summariseStorage, type StorageRow } from './storage';
 
@@ -104,6 +104,7 @@ export interface Collected {
   sysDescr: string; uptimeS: number | null; rttMs: number;
   cpu: number | null; cores: number[]; memory: number | null; disk: number | null;
   volumes: Volume[]; interfaces: IfaceInfo[]; processes: ProcessInfo[]; inventory: Inventory | null;
+  temperatureC: number | null; drives: DriveHealth[];
 }
 export type Counters = Map<string, { t: number; inO: bigint; outO: bigint }>;
 
@@ -167,7 +168,21 @@ async function collectInner(s: Sess, id: string, counters: Counters, withInvento
     .sort((a, b) => b.memGb - a.memGb).slice(0, 12);
 
   const inventory = withInventory ? await readInventory(s).catch(() => null) : null;
-  return { sysDescr: String(sys.get(OID.sysDescr) ?? ''), uptimeS: up === null ? null : Math.floor(up / 100), rttMs, cpu, cores, memory, disk, volumes, interfaces, processes, inventory };
+  const { temperatureC, drives } = await readSensors(s).catch(() => ({ temperatureC: null, drives: [] as DriveHealth[] }));
+  return { sysDescr: String(sys.get(OID.sysDescr) ?? ''), uptimeS: up === null ? null : Math.floor(up / 100), rttMs, cpu, cores, memory, disk, volumes, interfaces, processes, inventory, temperatureC, drives };
+}
+
+/** Temperatures and drive health, read on every poll. Today this comes from the Synology vendor MIB. */
+const DISK_STATUS: Record<number, string> = { 1: 'Normal', 2: 'Initialized', 3: 'Not initialized', 4: 'System partition failed', 5: 'Crashed' };
+async function readSensors(s: Sess): Promise<{ temperatureC: number | null; drives: DriveHealth[] }> {
+  const sys = await get(s, [OID.synoSysTemp]).catch(() => new Map<string, Val>());
+  const [model, status, temp] = await Promise.all([OID.synoDiskModel, OID.synoDiskStatus, OID.synoDiskTemp].map((o) => soft(walk(s, o))));
+  const t = num(sys.get(OID.synoSysTemp));
+  const drives = [...model].map(([i, m]): DriveHealth => {
+    const st = num(status.get(i)), tmp = num(temp.get(i));
+    return { model: text(m) ?? 'Unknown', tempC: tmp !== null && tmp > 0 ? tmp : null, status: st === null ? null : DISK_STATUS[st] ?? `status ${st}`, ok: st === null ? null : st === 1 || st === 2 };
+  });
+  return { temperatureC: t !== null && t > 0 ? t : null, drives: drives.slice(0, 16) };
 }
 
 const text = (v: Val | undefined, max = 120): string | null => {
@@ -186,7 +201,6 @@ async function readInventory(s: Sess): Promise<Inventory> {
   const chassis = [...entClass].find(([, c]) => c === 3)?.[0] ?? [...entSerial].find(([, v]) => text(v))?.[0];
   const ent = (m: Map<string, Val>) => (chassis ? text(m.get(chassis)) : null);
 
-  const DISK_STATUS: Record<number, string> = { 1: 'Normal', 2: 'Initialized', 3: 'Not initialized', 4: 'System partition failed', 5: 'Crashed' };
   const disks = [...synoDisk].map(([i, m]) => {
     const st = num(synoStatus.get(i)), tmp = num(synoTemp.get(i));
     const detail = [text(synoType.get(i)), tmp !== null && tmp > 0 ? `${tmp} °C` : null, st === null ? null : DISK_STATUS[st] ?? `status ${st}`].filter(Boolean).join(' · ');
@@ -201,5 +215,6 @@ async function readInventory(s: Sess): Promise<Inventory> {
     firmware: ent(entSw) ?? ent(entFw) ?? text(sys.get(OID.synoVersion)),
     temperatureC: ((t) => (t !== null && t > 0 ? t : null))(num(sys.get(OID.synoSysTemp))), cpuModel: cpus[0] ?? null, cpuCount: cpus.length || null, ramTotalGb: ramKb ? Math.round((ramKb / 1048576) * 10) / 10 : null,
     disks: disks.slice(0, 16),
+    osName: null, osBuild: null, biosVersion: null, biosDate: null, boardManufacturer: null, boardModel: null, boardSerial: null, ramModules: [], gpus: [], apps: [],
   };
 }

@@ -10,8 +10,8 @@ export const RULE_META: Record<RuleKey, { name: string; unit: string; live: bool
   disk: { name: 'Low disk space', unit: '% disk used', live: true },
   offline: { name: 'Device offline', unit: '', live: true },
   service: { name: 'Service failure', unit: 'failed services', live: true },
-  temperature: { name: 'High temperature', unit: '°C', live: false },
-  smart: { name: 'SMART errors', unit: 'errors', live: false },
+  temperature: { name: 'High temperature', unit: '°C', live: true },
+  smart: { name: 'Drive health', unit: 'failing drives', live: true },
 };
 
 interface Rule { key: RuleKey; threshold: number; durationS: number; severity: Severity; enabled: boolean }
@@ -44,7 +44,9 @@ function measure(rule: Rule, d: DeviceRow): { breach: boolean; detail: string } 
     case 'memory': return pct(m.memory, 'Memory');
     case 'disk': return pct(m.disk, 'Disk');
     case 'service': return { breach: m.failed.length > 0 && m.failed.length >= rule.threshold, detail: `Failed: ${m.failed.join(', ')}` };
-    default: return null; // temperature and SMART need collectors that read them
+    case 'temperature': return m.temperature === null ? null : { breach: m.temperature > rule.threshold, detail: `Hottest sensor at ${m.temperature} °C (limit ${rule.threshold} °C)` };
+    case 'smart': return !m.hasDriveData ? null : { breach: m.driveIssues.length >= Math.max(1, rule.threshold), detail: `Drive problem: ${m.driveIssues.join(', ')}` };
+    default: return null;
   }
 }
 

@@ -5,11 +5,15 @@ import Shell from '@/components/Shell';
 import SourceBadge from '@/components/SourceBadge';
 import StatusPill from '@/components/StatusPill';
 import { useFleet } from '@/lib/api';
+import { SortTh, useSort } from '@/lib/sort';
 import { isLive, RANK } from '@/lib/status';
 
 export default function Devices() {
   const { devices, live } = useFleet();
-  const rows = [...devices].sort((a, b) => RANK[a.status] - RANK[b.status] || a.name.localeCompare(b.name));
+  const { rows, sort } = useSort(devices, {
+    status: (d) => RANK[d.status], name: (d) => d.name, monitor: (d) => d.monitor, health: (d) => (isLive(d.status) ? d.health : null),
+    cpu: (d) => (isLive(d.status) ? d.cpu : null), memory: (d) => (isLive(d.status) ? d.memory : null), disk: (d) => (isLive(d.status) ? d.disk : null), latency: (d) => d.latencyMs,
+  }, { key: 'status', tie: 'name' });
   return (
     <Shell live={live}>
       <div className="mb-4 flex items-center justify-between">
@@ -19,7 +23,10 @@ export default function Devices() {
       <div className="overflow-x-auto rounded-xl border border-line bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="text-muted">
-            <tr>{['Status', 'Name', 'Monitoring', 'Health', 'CPU', 'Memory', 'Storage', 'Latency'].map((h) => <th key={h} scope="col" className="border-b border-line p-3 font-medium">{h}</th>)}</tr>
+            <tr>
+              <SortTh label="Status" k="status" sort={sort} /><SortTh label="Name" k="name" sort={sort} /><SortTh label="Monitoring" k="monitor" sort={sort} /><SortTh label="Health" k="health" sort={sort} />
+              <SortTh label="CPU" k="cpu" sort={sort} /><SortTh label="Memory" k="memory" sort={sort} /><SortTh label="Storage" k="disk" sort={sort} /><SortTh label="Latency" k="latency" sort={sort} />
+            </tr>
           </thead>
           <tbody>
             {rows.map((d) => (

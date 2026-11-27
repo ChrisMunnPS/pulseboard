@@ -2,6 +2,7 @@
 import type { AuditRow } from '@pulse/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { api, download } from '@/lib/api';
+import { SortTh, useSort } from '@/lib/sort';
 import { btn, card, input } from './ui';
 
 const PAGE = 100;
@@ -10,6 +11,7 @@ export default function AuditTab({ toast }: { toast: (t: string, bad?: boolean) 
   const [more, setMore] = useState(false);
   const [q, setQ] = useState('');
   const [result, setResult] = useState('');
+  const { rows: sortedRows, sort } = useSort(rows, { at: (r) => r.at, actor: (r) => r.actor, action: (r) => r.action, target: (r) => r.target, result: (r) => r.result }, { key: 'at', dir: 'desc' });
   const qs = (offset: number) => new URLSearchParams({ q, result, limit: String(PAGE), offset: String(offset) }).toString();
 
   const load = useCallback(async (offset: number) => {
@@ -30,8 +32,8 @@ export default function AuditTab({ toast }: { toast: (t: string, bad?: boolean) 
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] text-left text-sm">
-          <thead className="text-muted"><tr><th className="p-2">Time</th><th className="p-2">User</th><th className="p-2">Action</th><th className="p-2">Target</th><th className="p-2">Result</th></tr></thead>
-          <tbody>{rows.map((r) => (
+          <thead className="text-muted"><tr><SortTh label="Time" k="at" sort={sort} /><SortTh label="User" k="actor" sort={sort} /><SortTh label="Action" k="action" sort={sort} /><SortTh label="Target" k="target" sort={sort} /><SortTh label="Result" k="result" sort={sort} /></tr></thead>
+          <tbody>{sortedRows.map((r) => (
             <tr key={r.id} className="border-t border-line"><td className="whitespace-nowrap p-2">{new Date(r.at).toLocaleString()}</td><td className="p-2">{r.actor ?? '–'}</td><td className="p-2">{r.action}</td><td className="p-2">{r.target ?? '–'}</td>
               <td className={`p-2 ${r.result === 'ok' ? '' : 'text-crit'}`}>{r.result === 'ok' ? '✔ ok' : `✖ ${r.result}`}</td></tr>))}
             {rows.length === 0 && <tr><td className="p-3 text-muted" colSpan={5}>No entries match.</td></tr>}</tbody>

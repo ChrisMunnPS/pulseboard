@@ -43,6 +43,7 @@ export default function Login() {
         <button disabled={busy} className="w-full rounded-lg bg-accent px-3 py-2 font-medium text-on-accent disabled:opacity-60">
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
+        <p className="text-center text-xs text-muted">Pulseboard v{process.env.NEXT_PUBLIC_APP_VERSION}</p>
       </form>
     </main>
   );

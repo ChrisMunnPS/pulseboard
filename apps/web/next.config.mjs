@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+// The product version lives in the root package.json
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 
 /** @type {import('next').NextConfig} */
 export default {
@@ -7,6 +11,7 @@ export default {
   outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
   transpilePackages: ['@pulse/shared'],
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_APP_VERSION: version },
   async headers() {
     return [{ source: '/:path*', headers: [
       { key: 'X-Frame-Options', value: 'DENY' },

@@ -6,8 +6,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 const NAV: [href: string, label: string, ready: boolean][] = [
   ['/', 'Dashboard', true], ['/devices', 'Devices', true], ['/alerts', 'Alerts', true],
-  ['#', 'Performance', false], ['#', 'Storage', false], ['#', 'Network', false], ['#', 'Services', false],
-  ['#', 'Processes', false], ['#', 'Remote Devices', false], ['#', 'Reports', false], ['/settings', 'Settings', true],
+  ['/performance', 'Performance', true], ['/storage', 'Storage', true], ['/network', 'Network', true], ['/services', 'Services', true],
+  ['/processes', 'Processes', true], ['/remote', 'Remote Devices', true], ['#', 'Reports', false], ['/settings', 'Settings', true],
 ];
 
 // Picks black or white text for readability on the chosen accent colour.
@@ -60,6 +60,7 @@ export default function Shell({ children, live }: { children: ReactNode; live?: 
               <span key={label} aria-disabled="true" title="Coming soon" className="block cursor-not-allowed rounded-lg px-3 py-2 text-sm text-muted opacity-50">{label}</span>
             ),
           )}
+          <div className="mt-4 px-3 text-xs text-muted">Pulseboard v{process.env.NEXT_PUBLIC_APP_VERSION}</div>
         </nav>
         <div className="min-w-0 pb-20 md:pb-0">
           <header className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">

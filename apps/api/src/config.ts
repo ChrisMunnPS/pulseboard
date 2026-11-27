@@ -15,6 +15,7 @@ const Env = z.object({
   ),
   SEED_DEMO: z.enum(['true', 'false']).default('false'),
   CORS_ORIGIN: z.string().default('*'),
+  RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(90),
   POLL_SECONDS: z.coerce.number().int().min(10).max(300).default(30),
   TRUST_PROXY: z.enum(['true', 'false']).default('false'),
   PORT: z.coerce.number().default(4000),

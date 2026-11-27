@@ -6,6 +6,7 @@ const MAP: Record<Monitor, [string, string, string]> = {
   ping: ['●', 'Live: ping', 'text-ok'],
   tcp: ['●', 'Live: TCP port', 'text-ok'],
   snmp: ['●', 'Live: SNMP', 'text-ok'],
+  ssh: ['●', 'Live: SSH', 'text-ok'],
 };
 export default function SourceBadge({ monitor }: { monitor: Monitor }) {
   const [icon, label, color] = MAP[monitor];

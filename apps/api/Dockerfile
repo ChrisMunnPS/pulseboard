@@ -18,9 +18,10 @@ RUN apk upgrade --no-cache \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
            /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
-ENV NODE_ENV=production MIGRATIONS_DIR=/app/migrations
+ENV NODE_ENV=production MIGRATIONS_DIR=/app/migrations COLLECTORS_DIR=/app/collectors
 COPY --from=build /app/apps/api/dist/server.js ./server.js
 COPY --from=build /app/apps/api/migrations ./migrations
+COPY --from=build /app/apps/api/collectors ./collectors
 USER node
 EXPOSE 4000
 CMD ["node", "server.js"]
